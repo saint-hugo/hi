@@ -1,3 +1,4 @@
+<script>
     document.addEventListener("DOMContentLoaded", function () {
       var allowedZips = {
         "geo-local": window.geoLocalZips || [],
@@ -161,3 +162,4 @@
     }
   }
 });
+</script>
