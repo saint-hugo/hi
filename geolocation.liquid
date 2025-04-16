@@ -1,3 +1,68 @@
+<style>
+  #zip-announcement {
+    background: #fff;
+    padding: 12px 16px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: #425466;
+    border-bottom: 1px solid #E5E7EB;
+    position: sticky;
+    top: 0;
+    z-index: 9999;
+  }
+  #zip-announcement a {
+    color: #635BFF;
+    text-decoration: none;
+    font-weight: 600;
+    margin-left: 8px;
+  }
+  #zip-announcement a:hover {
+    text-decoration: underline;
+  }
+  .zip-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0px 8px 20px rgba(0, 0, 0, 0.15);
+    text-align: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    z-index: 1000;
+  }
+  .zip-popup input {
+    width: 80%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #D1D5DB;
+    border-radius: 6px;
+    font-size: 16px;
+  }
+  .zip-popup button {
+    background: #635BFF;
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .zip-popup button:hover {
+    background: #5145CD;
+  }
+
+  [id$="__header_local"],
+  [id$="__header_zone4"],
+  [id$="__header_zones2_3"],
+  [id$="__header_zones5_8"] {
+    visibility: hidden;
+  }
+</style>
+
       <div id="zip-announcement"></div>
 <div id="zip-popup" class="zip-popup" style="display: none;">
   <p>Share your zip code to see what’s available near you.</p>
@@ -6,25 +71,25 @@
   <button id="zip-submit">Submit</button>
 </div>
 
-<script src="{{ 'geo-local.js' | asset_url }}"></script>
-<script src="{{ 'geo-zones-2-3.js' | asset_url }}"></script>
-<script src="{{ 'geo-zone-4.js' | asset_url }}"></script>
-<script src="{{ 'geo-zones-5-8.js' | asset_url }}"></script>
+  <script src="{{ 'geo-local.js' | asset_url }}"></script>
+  <script src="{{ 'geo-zones-2-3.js' | asset_url }}"></script>
+  <script src="{{ 'geo-zone-4.js' | asset_url }}"></script>
+  <script src="{{ 'geo-zones-5-8.js' | asset_url }}"></script>
 
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-  var allowedZips = {
-    "geo-local": window.geoLocalZips || [],
-    "geo-zones-2-3": window.geoZones2_3Zips || [],
-    "geo-zone-4": window.geoZone4Zips || [],
-    "geo-zones-5-8": window.geoZones5_8Zips || []
-  };
+    document.addEventListener("DOMContentLoaded", function () {
+      var allowedZips = {
+        "geo-local": window.geoLocalZips || [],
+        "geo-zones-2-3": window.geoZones2_3Zips || [],
+        "geo-zone-4": window.geoZone4Zips || [],
+        "geo-zones-5-8": window.geoZones5_8Zips || []
+      };
 
   var multiColumnSections = {
-    "geo-local": "shopify-section-template--24397971390742__multi_column_main_local",
-    "geo-zones-2-3": "shopify-section-template--24397971390742__multi_column_main_zone_2_3",
-    "geo-zone-4": "shopify-section-template--24397971390742__multi_column_main_zone_4",
-    "geo-zones-5-8": "shopify-section-template--24397971390742__multi_column_main-zones_5_8"
+    "geo-local": "shopify-section-template--24466623889686__multi_column_main_local",
+    "geo-zones-2-3": "shopify-section-template--24466623889686__multi_column_main_zone_2_3",
+    "geo-zone-4": "shopify-section-template--24466623889686__multi_column_main_zone_4",
+    "geo-zones-5-8": "shopify-section-template--24466623889686__multi_column_main-zones_5_8"
   };
 
   var zipCode = localStorage.getItem("user_zipcode");
@@ -33,32 +98,13 @@ document.addEventListener("DOMContentLoaded", function () {
   var zipSubmit = document.getElementById("zip-submit");
   var zipAnnouncement = document.getElementById("zip-announcement");
 
-  function clearCart() {
-    fetch('/cart.js')
-      .then(response => response.json())
-      .then(cart => {
-        cart.items.forEach(function(item) {
-          fetch('/cart/change.js', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: item.key, quantity: 0 })
-          });
-        });
-      })
-      .catch(error => console.error('Error clearing cart:', error));
-  }
-
   function setZipCode(zip) {
-    var oldZip = localStorage.getItem("user_zipcode");
     localStorage.setItem("user_zipcode", zip);
-    if (oldZip && oldZip !== zip) {
-      clearCart();
-    }
     updateAnnouncementBar(zip);
     filterNavigationByZip(zip);
     filterProductsByZip(zip);
     showMultiColumnByZip(zip);
-    updateUrlBasedOnZip(zip);
+    redirectBasedOnZip(zip);
   }
 
   function updateAnnouncementBar(zip) {
@@ -66,39 +112,32 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function askForZipCode(prefillZip = "") {
-    if (prefillZip) { zipInput.value = prefillZip; }
+    if (prefillZip) {
+      zipInput.value = prefillZip;
+    }
     zipPopup.style.display = "block";
   }
 
-  // Use navigator.geolocation with Nominatim reverse geocoding for prefill
   function tryGeolocationPrefill(callback) {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        function (position) {
-          var lat = position.coords.latitude;
-          var lon = position.coords.longitude;
-          fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat=" + lat + "&lon=" + lon)
-            .then(response => response.json())
-            .then(data => {
-              if (data && data.address && data.address.postcode) {
-                callback(data.address.postcode.trim());
-              } else {
-                callback("");
-              }
-            })
-            .catch(() => { callback(""); });
-        },
-        function () { callback(""); }
-      );
-    } else {
-      callback("");
-    }
+    fetch("https://ipapi.co/json/")
+      .then(response => response.json())
+      .then(data => {
+        if (data && data.postal) {
+          const zip = data.postal.trim();
+          callback(zip);
+        } else {
+          callback("");
+        }
+      })
+      .catch(() => {
+        callback("");
+      });
   }
 
   if (!zipCode) {
     tryGeolocationPrefill(function (geoZip) {
       if (geoZip) {
-        setZipCode(geoZip);
+        setZipCode(geoZip); 
         askForZipCode(geoZip);
       } else {
         askForZipCode();
@@ -109,7 +148,7 @@ document.addEventListener("DOMContentLoaded", function () {
     filterNavigationByZip(zipCode);
     filterProductsByZip(zipCode);
     showMultiColumnByZip(zipCode);
-    updateUrlBasedOnZip(zipCode);
+    redirectBasedOnZip(zipCode);
   }
 
   zipSubmit.addEventListener("click", function () {
@@ -130,7 +169,8 @@ document.addEventListener("DOMContentLoaded", function () {
     var productLinks = document.querySelectorAll("a[href*='/collections/']");
     productLinks.forEach(function(link) {
       var href = link.getAttribute("href");
-      var match = href.match(/\/collections\/([^\/]+)\/products\//);
+      var regex = /\/collections\/([^\/]+)\/products\//;
+      var match = href.match(regex);
       if (match) {
         var collection = match[1];
         if (allowedZips[collection]) {
@@ -171,28 +211,41 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function showMultiColumnByZip(userZip) {
     Object.keys(multiColumnSections).forEach(function(zoneKey) {
-      var section = document.getElementById(multiColumnSections[zoneKey]);
+      var sectionId = multiColumnSections[zoneKey];
+      var section = document.getElementById(sectionId);
       if (section) {
-        section.style.display = (allowedZips[zoneKey] && allowedZips[zoneKey].indexOf(userZip) !== -1) ? "block" : "none";
+        if (allowedZips[zoneKey] && allowedZips[zoneKey].indexOf(userZip) === -1) {
+          section.style.display = "none";
+        } else {
+          section.style.display = "block";
+        }
       }
     });
   }
 
-  // Updated function to use pushState with corrected key names
-  function updateUrlBasedOnZip(userZip) {
+  function redirectBasedOnZip(userZip) {
+    // Remove any trailing slash from the path
     var currentPath = window.location.pathname.replace(/\/$/, '');
     if (currentPath === '/pages/cleanse-programs') {
       if (allowedZips["geo-local"].indexOf(userZip) !== -1) {
-        // User remains on the same page
+        // User is in geo-local—stay on this page.
         return;
       } else if (allowedZips["geo-zone-4"].indexOf(userZip) !== -1) {
-        history.pushState(null, '', "/pages/cleanse-programs-4");
+        window.location.href = "https://hi-vibe.com/pages/cleanse-programs-4";
       } else if (allowedZips["geo-zones-2-3"].indexOf(userZip) !== -1) {
-        history.pushState(null, '', "/pages/cleanse-programs-2-3");
+        window.location.href = "https://hi-vibe.com/pages/cleanse-programs-2-3";
       } else if (allowedZips["geo-zones-5-8"].indexOf(userZip) !== -1) {
-        history.pushState(null, '', "/pages/cleanse-programs-5-8");
+        window.location.href = "https://hi-vibe.com/pages/cleanse-programs-5-8";
       }
     }
   }
 });
 </script>
+
+<!--
+Page mapping:
+Local: https://hi-vibe.com/pages/cleanse-programs
+Zones 4: https://hi-vibe.com/pages/cleanse-programs-4
+Zones 2-3: https://hi-vibe.com/pages/cleanse-programs-2-3
+Zones 5-8: https://hi-vibe.com/pages/cleanse-programs-5-8
+-->
