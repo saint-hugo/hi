@@ -1,0 +1,198 @@
+      <div id="zip-announcement"></div>
+<div id="zip-popup" class="zip-popup" style="display: none;">
+  <p>Share your zip code to see what’s available near you.</p>
+  <input type="text" id="zip-input" placeholder="Enter zip code">
+  <br>
+  <button id="zip-submit">Submit</button>
+</div>
+
+<script src="{{ 'geo-local.js' | asset_url }}"></script>
+<script src="{{ 'geo-zones-2-3.js' | asset_url }}"></script>
+<script src="{{ 'geo-zone-4.js' | asset_url }}"></script>
+<script src="{{ 'geo-zones-5-8.js' | asset_url }}"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var allowedZips = {
+    "geo-local": window.geoLocalZips || [],
+    "geo-zones-2-3": window.geoZones2_3Zips || [],
+    "geo-zone-4": window.geoZone4Zips || [],
+    "geo-zones-5-8": window.geoZones5_8Zips || []
+  };
+
+  var multiColumnSections = {
+    "geo-local": "shopify-section-template--24397971390742__multi_column_main_local",
+    "geo-zones-2-3": "shopify-section-template--24397971390742__multi_column_main_zone_2_3",
+    "geo-zone-4": "shopify-section-template--24397971390742__multi_column_main_zone_4",
+    "geo-zones-5-8": "shopify-section-template--24397971390742__multi_column_main-zones_5_8"
+  };
+
+  var zipCode = localStorage.getItem("user_zipcode");
+  var zipPopup = document.getElementById("zip-popup");
+  var zipInput = document.getElementById("zip-input");
+  var zipSubmit = document.getElementById("zip-submit");
+  var zipAnnouncement = document.getElementById("zip-announcement");
+
+  function clearCart() {
+    fetch('/cart.js')
+      .then(response => response.json())
+      .then(cart => {
+        cart.items.forEach(function(item) {
+          fetch('/cart/change.js', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: item.key, quantity: 0 })
+          });
+        });
+      })
+      .catch(error => console.error('Error clearing cart:', error));
+  }
+
+  function setZipCode(zip) {
+    var oldZip = localStorage.getItem("user_zipcode");
+    localStorage.setItem("user_zipcode", zip);
+    if (oldZip && oldZip !== zip) {
+      clearCart();
+    }
+    updateAnnouncementBar(zip);
+    filterNavigationByZip(zip);
+    filterProductsByZip(zip);
+    showMultiColumnByZip(zip);
+    updateUrlBasedOnZip(zip);
+  }
+
+  function updateAnnouncementBar(zip) {
+    zipAnnouncement.innerHTML = zip + ' <a href="#" id="change-zip">Change Zipcode</a>';
+  }
+
+  function askForZipCode(prefillZip = "") {
+    if (prefillZip) { zipInput.value = prefillZip; }
+    zipPopup.style.display = "block";
+  }
+
+  // Use navigator.geolocation with Nominatim reverse geocoding for prefill
+  function tryGeolocationPrefill(callback) {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        function (position) {
+          var lat = position.coords.latitude;
+          var lon = position.coords.longitude;
+          fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat=" + lat + "&lon=" + lon)
+            .then(response => response.json())
+            .then(data => {
+              if (data && data.address && data.address.postcode) {
+                callback(data.address.postcode.trim());
+              } else {
+                callback("");
+              }
+            })
+            .catch(() => { callback(""); });
+        },
+        function () { callback(""); }
+      );
+    } else {
+      callback("");
+    }
+  }
+
+  if (!zipCode) {
+    tryGeolocationPrefill(function (geoZip) {
+      if (geoZip) {
+        setZipCode(geoZip);
+        askForZipCode(geoZip);
+      } else {
+        askForZipCode();
+      }
+    });
+  } else {
+    updateAnnouncementBar(zipCode);
+    filterNavigationByZip(zipCode);
+    filterProductsByZip(zipCode);
+    showMultiColumnByZip(zipCode);
+    updateUrlBasedOnZip(zipCode);
+  }
+
+  zipSubmit.addEventListener("click", function () {
+    var userZip = zipInput.value.trim();
+    if (userZip) {
+      zipPopup.style.display = "none";
+      setZipCode(userZip);
+    }
+  });
+
+  document.addEventListener("click", function (e) {
+    if (e.target && e.target.id === "change-zip") {
+      askForZipCode(localStorage.getItem("user_zipcode") || "");
+    }
+  });
+
+  function filterProductsByZip(userZip) {
+    var productLinks = document.querySelectorAll("a[href*='/collections/']");
+    productLinks.forEach(function(link) {
+      var href = link.getAttribute("href");
+      var match = href.match(/\/collections\/([^\/]+)\/products\//);
+      if (match) {
+        var collection = match[1];
+        if (allowedZips[collection]) {
+          if (allowedZips[collection].indexOf(userZip) === -1) {
+            var productItem = link.closest(".product-item") || link.closest(".grid__item");
+            if (productItem) {
+              productItem.style.display = "none";
+            } else {
+              link.style.display = "none";
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function filterNavigationByZip(userZip) {
+    var navMapping = {
+      "header_local": "geo-local",
+      "header_zone4": "geo-zone-4",
+      "header_zones2_3": "geo-zones-2-3",
+      "header_zones5_8": "geo-zones-5-8"
+    };
+
+    Object.keys(navMapping).forEach(function(navKey) {
+      var zoneKey = navMapping[navKey];
+      var navElements = document.querySelectorAll('[id$="__' + navKey + '"]');
+      navElements.forEach(function(el) {
+        if (allowedZips[zoneKey] && allowedZips[zoneKey].indexOf(userZip) === -1) {
+          el.style.display = "none";
+        } else {
+          el.style.display = "block";
+        }
+        el.style.visibility = "visible";
+      });
+    });
+  }
+
+  function showMultiColumnByZip(userZip) {
+    Object.keys(multiColumnSections).forEach(function(zoneKey) {
+      var section = document.getElementById(multiColumnSections[zoneKey]);
+      if (section) {
+        section.style.display = (allowedZips[zoneKey] && allowedZips[zoneKey].indexOf(userZip) !== -1) ? "block" : "none";
+      }
+    });
+  }
+
+  // Updated function to use pushState with corrected key names
+  function updateUrlBasedOnZip(userZip) {
+    var currentPath = window.location.pathname.replace(/\/$/, '');
+    if (currentPath === '/pages/cleanse-programs') {
+      if (allowedZips["geo-local"].indexOf(userZip) !== -1) {
+        // User remains on the same page
+        return;
+      } else if (allowedZips["geo-zone-4"].indexOf(userZip) !== -1) {
+        history.pushState(null, '', "/pages/cleanse-programs-4");
+      } else if (allowedZips["geo-zones-2-3"].indexOf(userZip) !== -1) {
+        history.pushState(null, '', "/pages/cleanse-programs-2-3");
+      } else if (allowedZips["geo-zones-5-8"].indexOf(userZip) !== -1) {
+        history.pushState(null, '', "/pages/cleanse-programs-5-8");
+      }
+    }
+  }
+});
+</script>
